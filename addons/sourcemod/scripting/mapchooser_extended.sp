@@ -2152,8 +2152,9 @@ stock AddMapItem(const String:map[])
 	}
 	else
 	{
-		decl String:display[32];
-		Format(display, sizeof(display), "%s [T:%d]", map, Timer_GetTier(TRACK_NORMAL));
+		decl String:display[32], String:sMap[32];
+		strcopy(sMap, sizeof(sMap), map);
+		Format(display, sizeof(display), "%s [T:%d]", map, Timer_GetMapTier(sMap, TRACK_NORMAL));
 		AddMenuItem(g_VoteMenu, map, display);
 	}
 }
