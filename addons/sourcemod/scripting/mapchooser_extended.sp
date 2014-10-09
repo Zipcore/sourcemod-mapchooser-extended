@@ -50,6 +50,8 @@
 #include <nextmap>
 #include <sdktools>
 #include <colors>
+#include <timer>
+#include <timer-maptier>
 
 #undef REQUIRE_PLUGIN
 #include <nativevotes>
@@ -2150,7 +2152,9 @@ stock AddMapItem(const String:map[])
 	}
 	else
 	{
-		AddMenuItem(g_VoteMenu, map, map);
+		decl String:display[32];
+		Format(display, sizeof(display), "%s [T:%d]", map, Timer_GetTier(TRACK_NORMAL));
+		AddMenuItem(g_VoteMenu, map, display);
 	}
 }
 
