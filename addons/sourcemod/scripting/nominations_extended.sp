@@ -119,6 +119,11 @@ public OnConfigsExecuted()
 	BuildMapMenu();
 }
 
+public OnMapTiersLoaded()
+{
+	BuildMapMenu();
+}
+
 public OnNominationRemoved(const String:map[], owner)
 {
 	new status;
@@ -446,12 +451,12 @@ public Handler_MapSelectMenu(Handle:menu, MenuAction:action, param1, param2)
 				{
 					case 1:
 					{
-						Format(buffer, sizeof(buffer), "%T", "Custom Marked", param1, map);
+						Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom Marked", param1, map, Timer_GetMapTier(buffer, TRACK_NORMAL));
 					}
 					
 					case 2:
 					{
-						Format(buffer, sizeof(buffer), "%T", "Custom", param1, map);
+						Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom", param1, map, Timer_GetMapTier(buffer, TRACK_NORMAL));
 					}
 				}
 			}
