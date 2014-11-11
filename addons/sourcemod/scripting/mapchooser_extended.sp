@@ -1573,12 +1573,12 @@ public Handler_MapVoteMenu(Handle:menu, MenuAction:action, param1, param2)
 						{
 							case 1:
 							{
-								Format(buffer, sizeof(buffer), "%T [Tier:%d]", "Custom Marked", param1, map, tier);
+								Format(buffer, sizeof(buffer), "[Tier %d] %T", tier, "Custom Marked", param1, map);
 							}
 							
 							case 2:
 							{
-								Format(buffer, sizeof(buffer), "%T [Tier:%d]", "Custom", param1, map, tier);
+								Format(buffer, sizeof(buffer), "[Tier %d] %T", tier, "Custom", param1, map);
 							}
 						}
 					}
@@ -2249,7 +2249,7 @@ stock AddMapItem(const String:map[])
 	{
 		decl String:display[32], String:sMap[32];
 		strcopy(sMap, sizeof(sMap), map);
-		Format(display, sizeof(display), "%s [Tier:%d]", map, Timer_GetMapTier(sMap, TRACK_NORMAL));
+		Format(display, sizeof(display), "[Tier %d] %s", Timer_GetMapTier(sMap, TRACK_NORMAL), map);
 		AddMenuItem(g_VoteMenu, map, display);
 	}
 }
