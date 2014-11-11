@@ -4,7 +4,7 @@
  * Nominations Extended
  * Allows players to nominate maps for Mapchooser
  *
- * Nominations Extended (C)2012-2013 Powerlord (Ross Bemrose)
+ * Nominations Extended (C)2012-2014 Powerlord (Ross Bemrose)
  * SourceMod (C)2004-2007 AlliedModders LLC.  All rights reserved.
  * =============================================================================
  *
@@ -33,6 +33,7 @@
  */
 
 #include <sourcemod>
+#include "include/map_workshop_functions.inc"
 #include <mapchooser>
 #include "include/mapchooser_extended"
 #include <colors>
@@ -40,7 +41,10 @@
 #include <timer-maptier>
 #pragma semicolon 1
 
-#define MCE_VERSION "1.10.0"
+#undef REQUIRE_PLUGIN
+#include <nativevotes>
+
+#define MCE_VERSION "1.11.0 beta 4"
 
 public Plugin:myinfo =
 {
@@ -53,6 +57,9 @@ public Plugin:myinfo =
 
 new Handle:g_Cvar_ExcludeOld = INVALID_HANDLE;
 new Handle:g_Cvar_ExcludeCurrent = INVALID_HANDLE;
+
+new Handle:g_Cvar_NVNextLevel = INVALID_HANDLE;
+new Handle:g_Cvar_NVChangeLevel = INVALID_HANDLE;
 
 new Handle:g_MapList = INVALID_HANDLE;
 new Handle:g_MapMenu = INVALID_HANDLE;
@@ -69,6 +76,12 @@ new Handle:g_mapTrie;
 // Nominations Extended Convars
 new Handle:g_Cvar_MarkCustomMaps = INVALID_HANDLE;
 
+new bool:g_NativeVotes = false;
+new bool:g_RegisteredMenusChangeLevel = false;
+new bool:g_RegisteredMenusNextLevel = false;
+
+#define NV "nativevotes"
+
 public OnPluginStart()
 {
 	LoadTranslations("common.phrases");
@@ -79,8 +92,8 @@ public OnPluginStart()
 	new arraySize = ByteCountToCells(PLATFORM_MAX_PATH);	
 	g_MapList = CreateArray(arraySize);
 	
-	g_Cvar_ExcludeOld = CreateConVar("sm_nominate_excludeold", "1", "Specifies if the current map should be excluded from the Nominations list", 0, true, 0.00, true, 1.0);
-	g_Cvar_ExcludeCurrent = CreateConVar("sm_nominate_excludecurrent", "1", "Specifies if the MapChooser excluded maps should also be excluded from Nominations", 0, true, 0.00, true, 1.0);
+	g_Cvar_ExcludeOld = CreateConVar("ne_excludeold", "1", "Specifies if the current map should be excluded from the Nominations list", 0, true, 0.00, true, 1.0);
+	g_Cvar_ExcludeCurrent = CreateConVar("ne_excludecurrent", "1", "Specifies if the MapChooser excluded maps should also be excluded from Nominations", 0, true, 0.00, true, 1.0);
 	
 	RegConsoleCmd("say", Command_Say);
 	RegConsoleCmd("say_team", Command_Say);
@@ -91,15 +104,122 @@ public OnPluginStart()
 	
 	// Nominations Extended cvars
 	CreateConVar("ne_version", MCE_VERSION, "Nominations Extended Version", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_NOTIFY|FCVAR_DONTRECORD);
-
-
+	g_Cvar_NVChangeLevel = CreateConVar("ne_nativevotes_changelevel", "1", "TF2: Add ChangeLevel to NativeVotes 1.0 vote menu.", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	g_Cvar_NVNextLevel = CreateConVar("ne_nativevotes_nextlevel", "1", "TF2: Add NextLevel to NativeVotes 1.0 vote menu.", FCVAR_PLUGIN, true, 0.0, true, 1.0);
+	
+	HookConVarChange(g_Cvar_NVChangeLevel, Cvar_ChangeLevel);
+	HookConVarChange(g_Cvar_NVNextLevel, Cvar_NextLevel);
+	
+	AutoExecConfig(true, "nominations_extended");
+	
 	g_mapTrie = CreateTrie();
 }
 
 public OnAllPluginsLoaded()
 {
+	if (FindPluginByFile("nominations.smx") != INVALID_HANDLE)
+	{
+		SetFailState("This plugin replaces nominations.  You cannot run both at once.");
+	}
+	
 	// This is an MCE cvar... this plugin requires MCE to be loaded.  Granted, this plugin SHOULD have an MCE dependency.
 	g_Cvar_MarkCustomMaps = FindConVar("mce_markcustommaps");
+
+	g_NativeVotes = LibraryExists(NV) && NativeVotes_IsVoteTypeSupported(NativeVotesType_NextLevelMult) && GetFeatureStatus(FeatureType_Native, "NativeVotes_IsVoteCommandRegistered") == FeatureStatus_Available;
+	RegisterVoteHandler();
+}
+
+public OnPluginEnd()
+{
+	if (g_NativeVotes)
+	{
+		if (g_RegisteredMenusNextLevel)
+		{
+			NativeVotes_UnregisterVoteCommand("NextLevel", Menu_Nominate);
+		}
+		
+		if (g_RegisteredMenusChangeLevel)
+		{
+			NativeVotes_UnregisterVoteCommand("ChangeLevel", Menu_Nominate);
+		}
+	}
+}
+
+public OnLibraryAdded(const String:name[])
+{
+	if (StrEqual(name, NV) && NativeVotes_IsVoteTypeSupported(NativeVotesType_NextLevelMult) && GetFeatureStatus(FeatureType_Native, "NativeVotes_IsVoteCommandRegistered") == FeatureStatus_Available)
+	{
+		g_NativeVotes = true;
+		RegisterVoteHandler();
+	}
+}
+
+public OnLibraryRemoved(const String:name[])
+{
+	if (StrEqual(name, NV))
+	{
+		g_NativeVotes = false;
+		g_RegisteredMenusNextLevel = false;
+		g_RegisteredMenusChangeLevel = false;
+	}
+}
+
+public Cvar_ChangeLevel(Handle:convar, const String:oldValue[], const String:newValue[])
+{
+	if (GetConVarBool(g_Cvar_NVChangeLevel))
+	{
+		if (!g_RegisteredMenusChangeLevel)
+		{
+			NativeVotes_RegisterVoteCommand("ChangeLevel", Menu_Nominate);
+			g_RegisteredMenusChangeLevel = true;
+		}
+	}
+	else
+	{
+		if (g_RegisteredMenusChangeLevel)
+		{
+			NativeVotes_UnregisterVoteCommand("ChangeLevel", Menu_Nominate);		
+			g_RegisteredMenusChangeLevel = false;
+		}
+	}
+}
+
+public Cvar_NextLevel(Handle:convar, const String:oldValue[], const String:newValue[])
+{
+	if (GetConVarBool(g_Cvar_NVNextLevel))
+	{
+		if (!g_RegisteredMenusNextLevel)
+		{
+			NativeVotes_RegisterVoteCommand("NextLevel", Menu_Nominate);
+			g_RegisteredMenusNextLevel = true;
+		}
+	}
+	else
+	{
+		if (g_RegisteredMenusNextLevel)
+		{
+			NativeVotes_UnregisterVoteCommand("NextLevel", Menu_Nominate);		
+			g_RegisteredMenusNextLevel = false;
+		}
+	}
+}
+
+RegisterVoteHandler()
+{
+	if (!g_NativeVotes)
+		return;
+		
+	if (GetConVarBool(g_Cvar_NVNextLevel))
+	{
+		NativeVotes_RegisterVoteCommand("NextLevel", Menu_Nominate);
+		g_RegisteredMenusNextLevel = true;
+	}
+	
+	if (GetConVarBool(g_Cvar_NVChangeLevel))
+	{
+		NativeVotes_RegisterVoteCommand("ChangeLevel", Menu_Nominate);
+		g_RegisteredMenusChangeLevel = true;
+	}
 }
 
 public OnConfigsExecuted()
@@ -217,6 +337,28 @@ public Action:Command_Say(client, args)
 	return Plugin_Continue;	
 }
 
+public Action:Menu_Nominate(client, const String:voteCommand[], const String:voteArgument[], NativeVotesKickType:kickType, target)
+{
+	if (!client || NativeVotes_IsVoteInProgress() || !IsNominateAllowed(client, true))
+	{
+		return Plugin_Handled;
+	}
+	
+	if (strlen(voteArgument) == 0)
+	{
+		NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_SpecifyMap);
+		return Plugin_Handled;
+	}
+	
+	new ReplySource:old = SetCmdReplySource(SM_REPLY_TO_CHAT);
+	
+	new Action:myReturn = Internal_NominateCommand(client, voteArgument, true);
+	
+	SetCmdReplySource(old);
+	
+	return myReturn;
+}
+
 public Action:Command_Nominate(client, args)
 {
 	if (!client || !IsNominateAllowed(client))
@@ -233,10 +375,19 @@ public Action:Command_Nominate(client, args)
 	decl String:mapname[PLATFORM_MAX_PATH];
 	GetCmdArg(1, mapname, sizeof(mapname));
 	
+	return Internal_NominateCommand(client, mapname, false);
+}
+
+Action:Internal_NominateCommand(client, const String:mapname[], bool:isVoteMenu)
+{
 	new status;
 	if (!GetTrieValue(g_mapTrie, mapname, status))
 	{
-		CReplyToCommand(client, "%t", "Map was not found", mapname);
+		if (isVoteMenu && g_NativeVotes)
+		{
+			NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_MapNotValid);
+		}
+		CReplyToCommand(client, "[NE] %t", "Map was not found", mapname);
 		return Plugin_Handled;		
 	}
 	
@@ -244,16 +395,28 @@ public Action:Command_Nominate(client, args)
 	{
 		if ((status & MAPSTATUS_EXCLUDE_CURRENT) == MAPSTATUS_EXCLUDE_CURRENT)
 		{
+			if (isVoteMenu && g_NativeVotes)
+			{
+				NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_MapNotValid);
+			}
 			CReplyToCommand(client, "[NE] %t", "Can't Nominate Current Map");
 		}
 		
 		if ((status & MAPSTATUS_EXCLUDE_PREVIOUS) == MAPSTATUS_EXCLUDE_PREVIOUS)
 		{
+			if (isVoteMenu && g_NativeVotes)
+			{
+				NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_MapNotValid);
+			}
 			CReplyToCommand(client, "[NE] %t", "Map in Exclude List");
 		}
 		
 		if ((status & MAPSTATUS_EXCLUDE_NOMINATED) == MAPSTATUS_EXCLUDE_NOMINATED)
 		{
+			if (isVoteMenu && g_NativeVotes)
+			{
+				NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_MapNotValid);
+			}
 			CReplyToCommand(client, "[NE] %t", "Map Already Nominated");
 		}
 		
@@ -266,10 +429,18 @@ public Action:Command_Nominate(client, args)
 	{
 		if (result == Nominate_AlreadyInVote)
 		{
-			CReplyToCommand(client, "%t", "Map Already In Vote", mapname);
+			if (isVoteMenu && g_NativeVotes)
+			{
+				NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_MapNotValid);
+			}
+			CReplyToCommand(client, "[NE] %t", "Map Already In Vote", mapname);
 		}
 		else
 		{
+			if (isVoteMenu && g_NativeVotes)
+			{
+				NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_MapNotValid);
+			}
 			CReplyToCommand(client, "[NE] %t", "Map Already Nominated");
 		}
 		
@@ -284,8 +455,8 @@ public Action:Command_Nominate(client, args)
 	GetClientName(client, name, sizeof(name));
 	PrintToChatAll("[NE] %t", "Map Nominated", name, mapname);
 	LogMessage("%s nominated %s", name, mapname);
-
-	return Plugin_Continue;
+	
+	return Plugin_Handled;
 }
 
 AttemptNominate(client)
@@ -311,7 +482,7 @@ BuildMapMenu()
 	decl String:map[PLATFORM_MAX_PATH];
 	
 	new Handle:excludeMaps = INVALID_HANDLE;
-	decl String:currentMap[32];
+	decl String:currentMap[PLATFORM_MAX_PATH];
 	
 	if (GetConVarBool(g_Cvar_ExcludeOld))
 	{	
@@ -332,7 +503,7 @@ BuildMapMenu()
 		
 		if (GetConVarBool(g_Cvar_ExcludeCurrent))
 		{
-			if (StrEqual(map, currentMap))
+			if (MapEqual(map, currentMap))
 			{
 				status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_CURRENT;
 			}
@@ -341,7 +512,7 @@ BuildMapMenu()
 		/* Dont bother with this check if the current map check passed */
 		if (GetConVarBool(g_Cvar_ExcludeOld) && status == MAPSTATUS_ENABLED)
 		{
-			if (FindStringInArray(excludeMaps, map) != -1)
+			if (FindMapStringInMapArray(excludeMaps, map))
 			{
 				status = MAPSTATUS_DISABLED|MAPSTATUS_EXCLUDE_PREVIOUS;
 			}
@@ -515,7 +686,7 @@ public Handler_MapSelectMenu(Handle:menu, MenuAction:action, param1, param2)
 	return 0;
 }
 
-stock bool:IsNominateAllowed(client)
+stock bool:IsNominateAllowed(client, bool:isVoteMenu=false)
 {
 	new CanNominateResult:result = CanNominate();
 	
@@ -523,7 +694,7 @@ stock bool:IsNominateAllowed(client)
 	{
 		case CanNominate_No_VoteInProgress:
 		{
-			CReplyToCommand(client, "[ME] %t", "Nextmap Voting Started");
+			CReplyToCommand(client, "[NE] %t", "Nextmap Voting Started");
 			return false;
 		}
 		
@@ -531,13 +702,21 @@ stock bool:IsNominateAllowed(client)
 		{
 			new String:map[PLATFORM_MAX_PATH];
 			GetNextMap(map, sizeof(map));
+			if (isVoteMenu && g_NativeVotes)
+			{
+				NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_LevelSet);
+			}
 			CReplyToCommand(client, "[NE] %t", "Next Map", map);
 			return false;
 		}
 		
 		case CanNominate_No_VoteFull:
 		{
-			CReplyToCommand(client, "[ME] %t", "Max Nominations");
+			if (isVoteMenu && g_NativeVotes)
+			{
+				NativeVotes_DisplayCallVoteFail(client, NativeVotesCallFail_Generic);				
+			}
+			CReplyToCommand(client, "[NE] %t", "Max Nominations");
 			return false;
 		}
 	}
