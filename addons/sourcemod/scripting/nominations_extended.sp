@@ -36,6 +36,8 @@
 #include <mapchooser>
 #include "include/mapchooser_extended"
 #include <colors>
+#include <timer>
+#include <timer-maptier>
 #pragma semicolon 1
 
 #define MCE_VERSION "1.10.0"
@@ -317,7 +319,6 @@ BuildMapMenu()
 		GetCurrentMap(currentMap, sizeof(currentMap));
 	}
 	
-		
 	for (new i = 0; i < GetArraySize(g_MapList); i++)
 	{
 		new status = MAPSTATUS_ENABLED;
@@ -341,7 +342,10 @@ BuildMapMenu()
 			}
 		}
 		
-		AddMenuItem(g_MapMenu, map, map);
+		decl String:display[32], String:sMap[32];
+		strcopy(sMap, sizeof(sMap), map);
+		Format(display, sizeof(display), "%s [T:%d]", map, Timer_GetMapTier(sMap, TRACK_NORMAL));
+		AddMenuItem(g_MapMenu, map, display);
 		SetTrieValue(g_mapTrie, map, status);
 	}
 	
