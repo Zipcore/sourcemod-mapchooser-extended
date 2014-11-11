@@ -1573,13 +1573,40 @@ public Handler_MapVoteMenu(Handle:menu, MenuAction:action, param1, param2)
 			// Note that the first part is to discard the spacer line
 			else if (!StrEqual(map, LINE_SPACER, false))
 			{
-				if (mark == 1 && !InternalIsMapOfficial(map))
+				new tier = Timer_GetMapTier(map, TRACK_NORMAL);
+				
+				if(!InternalIsMapOfficial(map))
 				{
-					Format(buffer, sizeof(buffer), "%T", "Custom Marked", param1, map);
-				}
-				else if (mark == 2 && !InternalIsMapOfficial(map))
-				{
-					Format(buffer, sizeof(buffer), "%T", "Custom", param1, map);
+					if(tier > 0)
+					{
+						switch (mark)
+						{
+							case 1:
+							{
+								Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom Marked", param1, map, tier);
+							}
+							
+							case 2:
+							{
+								Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom", param1, map, tier);
+							}
+						}
+					}
+					else
+					{
+						switch (mark)
+						{
+							case 1:
+							{
+								Format(buffer, sizeof(buffer), "%T", "Custom Marked", param1, map);
+							}
+							
+							case 2:
+							{
+								Format(buffer, sizeof(buffer), "%T", "Custom", param1, map);
+							}
+						}
+					}
 				}
 			}
 			

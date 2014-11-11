@@ -350,8 +350,8 @@ BuildMapMenu()
 		decl String:display[32], String:sMap[32];
 		strcopy(sMap, sizeof(sMap), map);
 		Format(display, sizeof(display), "%s [T:%d]", map, Timer_GetMapTier(sMap, TRACK_NORMAL));
-		AddMenuItem(g_MapMenu, map, display);
-		SetTrieValue(g_mapTrie, map, status);
+		AddMenuItem(g_MapMenu, sMap, display);
+		SetTrieValue(g_mapTrie, sMap, status);
 	}
 	
 	SetMenuExitButton(g_MapMenu, true);
@@ -418,12 +418,11 @@ public Handler_MapSelectMenu(Handle:menu, MenuAction:action, param1, param2)
 			}
 			
 			return ITEMDRAW_DEFAULT;
-						
 		}
 		
 		case MenuAction_DisplayItem:
 		{
-			decl String:map[PLATFORM_MAX_PATH];
+			decl String:map[32];
 			GetMenuItem(menu, param2, map, sizeof(map));
 			
 			new mark = GetConVarInt(g_Cvar_MarkCustomMaps);
@@ -447,16 +446,36 @@ public Handler_MapSelectMenu(Handle:menu, MenuAction:action, param1, param2)
 			
 			if (mark && !official)
 			{
-				switch (mark)
+				new tier = Timer_GetMapTier(map, TRACK_NORMAL);
+				
+				if(tier > 0)
 				{
-					case 1:
+					switch (mark)
 					{
-						Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom Marked", param1, map, Timer_GetMapTier(buffer, TRACK_NORMAL));
+						case 1:
+						{
+							Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom Marked", param1, map, tier);
+						}
+						
+						case 2:
+						{
+							Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom", param1, map, tier);
+						}
 					}
-					
-					case 2:
+				}
+				else
+				{
+					switch (mark)
 					{
-						Format(buffer, sizeof(buffer), "%T [T:%d]", "Custom", param1, map, Timer_GetMapTier(buffer, TRACK_NORMAL));
+						case 1:
+						{
+							Format(buffer, sizeof(buffer), "%T", "Custom Marked", param1, map);
+						}
+						
+						case 2:
+						{
+							Format(buffer, sizeof(buffer), "%T", "Custom", param1, map);
+						}
 					}
 				}
 			}
